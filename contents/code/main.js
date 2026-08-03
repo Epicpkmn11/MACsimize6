@@ -5,6 +5,7 @@ var enableIfOnlyOne = readConfig("enableIfOnlyOne", false);
 var enablePanelVisibility = readConfig("enablePanelVisibility", false);
 var exclusiveDesktops = readConfig("exclusiveDesktops", true)
 var debugMode = readConfig("debugMode", false)
+var animationTime = readConfig("animationTime", 700);
 
 function log(msg) {
     if (debugMode) {
@@ -170,9 +171,23 @@ function moveToNewDesktop(window) {
         }
 
         log(`Saved desktops for window ${windowId} : ${JSON.stringify(savedData.get(windowId))}`);
-        ds = [newDesktop];
         // Moving window to the new desktop
-        window.desktops = ds;
+        window.desktops = [newDesktop];
+        if(animationTime) {
+            window.onAllDesktops = true;
+            var timer = new QTimer();
+            timer.interval = animationTime;
+            timer.singleShot = true;
+            timer.timeout.connect(function() {
+                const data = savedData.get(window.internalId);
+                if (data && data.macsimized) {
+                    window.onAllDesktops = false;
+                    window.desktops = [newDesktop];
+                }
+            });
+            timer.start();
+        }
+
         // Switching to the new desktop
         workspace.currentDesktop = newDesktop;
     }
@@ -206,6 +221,7 @@ function restoreDesktop(window) {
     const data = savedData.get(windowId);
     log(`Restoring desktops for ${windowId}`);
     log(`Saved data: ${JSON.stringify(data)}`)
+    window.onAllDesktops = false;
     let windowDesktop = window.desktops[0];
     log(`Current desktop: ${JSON.stringify(windowDesktop)}`);
 
@@ -221,7 +237,20 @@ function restoreDesktop(window) {
         window.desktops = [newDesktop];
         cleanDesktop(windowDesktop);
         workspace.currentDesktop = newDesktop;
-        workspace.removeDesktop(windowDesktop);
+        if(animationTime) {
+            window.onAllDesktops = true;
+            var timer = new QTimer();
+            timer.interval = animationTime;
+            timer.singleShot = true;
+            timer.timeout.connect(function() {
+                workspace.removeDesktop(windowDesktop);
+                window.onAllDesktops = false;
+                window.desktops = [newDesktop];
+            });
+            timer.start();
+        } else {
+            workspace.removeDesktop(windowDesktop);
+        }
 
         // Update saved data for managed desktops
         let idx = managedDesktops.indexOf(windowDesktop);
